@@ -46,6 +46,7 @@ func mapStations(filePath string) (Stations, error) {
 		line := scanner.Text()
 		parts := strings.Split(line, ";")
 		name := parts[0]
+
 		temp, err := strconv.ParseFloat(parts[1], 64)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't convert string to float: %v", err)
