@@ -56,7 +56,7 @@ func mapStations(filePath string) (Stations, error) {
 			chunk = append(chunk, scanner.Text())
 			if len(chunk) == chunkSize {
 				chunks <- chunk
-				chunk = make([]string, 0, chunkSize)
+				chunk = chunk[:0]
 			}
 		}
 
