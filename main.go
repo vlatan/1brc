@@ -26,22 +26,7 @@ func main() {
 		log.Fatalf("Error mapping the stations: %v", err)
 	}
 
-	var sb strings.Builder
-	sb.WriteString("{")
-
-	for i, name := range sortNames(stations) {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-
-		stats := stations[name]
-		statsStr := fmt.Sprintf("%s=%.1f/%.1f/%.1f", name, stats.Min, stats.Sum/stats.Count, stats.Max)
-		sb.WriteString(statsStr)
-	}
-
-	sb.WriteString("}")
-
-	fmt.Println(sb.String())
+	fmt.Println(stations)
 	fmt.Println("Time took:", time.Since(start))
 }
 
@@ -91,15 +76,35 @@ func mapStations(filePath string) (Stations, error) {
 }
 
 // sortNames returns a slice of sorted station names
-func sortNames(stations Stations) []string {
-	names := make([]string, len(stations))
+func (s Stations) sortNames() []string {
+	names := make([]string, len(s))
 	var i int
 
-	for name := range stations {
+	for name := range s {
 		names[i] = name
 		i++
 	}
 
 	sort.Strings(names)
 	return names
+}
+
+// String creates a string respresentation from stations map
+func (s Stations) String() string {
+
+	var sb strings.Builder
+	sb.WriteString("{")
+
+	for i, name := range s.sortNames() {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+
+		stats := s[name]
+		statsStr := fmt.Sprintf("%s=%.1f/%.1f/%.1f", name, stats.Min, stats.Sum/stats.Count, stats.Max)
+		sb.WriteString(statsStr)
+	}
+
+	sb.WriteString("}")
+	return sb.String()
 }
