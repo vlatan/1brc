@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,47 +35,91 @@ func main() {
 // mapStations puts stations from file into a map with all the necessary stats
 func mapStations(filePath string) (Stations, error) {
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't open the file: %v", err)
+	// Lines in a chunk.
+	// The more lines, the more memory consumed and
+	// a biger chance for the OS to kill this program.
+	// Upper limit 40_000_000
+	chunkSize := 40_000_000
+
+	numWorkers := runtime.NumCPU() - 1
+	results := make(chan Stations, numWorkers)
+	chunks := make(chan []string, numWorkers)
+	var wg sync.WaitGroup
+
+	for range numWorkers {
+		wg.Go(func() { worker(chunks, results) })
 	}
 
-	defer file.Close()
+	go func() {
+		defer close(chunks)
+		file, _ := os.Open(filePath)
+		defer file.Close()
+
+		chunk := make([]string, 0, chunkSize)
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			chunk = append(chunk, scanner.Text())
+			if len(chunk) == chunkSize {
+				chunks <- chunk
+				chunk = make([]string, 0, chunkSize)
+			}
+		}
+
+		if len(chunk) > 0 {
+			chunks <- chunk
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	stations := make(Stations)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, ";")
-		name := parts[0]
+	for result := range results {
+		for name, stats := range result {
+			st, ok := stations[name]
+			if !ok {
+				st.Min = stats.Min
+				st.Max = stats.Max
+			}
 
-		temp, err := strconv.ParseFloat(parts[1], 64)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't convert string to float: %v", err)
+			st.Max = max(st.Max, stats.Max)
+			st.Min = min(st.Min, stats.Min)
+			st.Count += stats.Count
+			st.Sum += stats.Sum
+			stations[name] = st
 		}
-
-		st, ok := stations[name]
-		if !ok {
-			st.Min = temp
-			st.Max = temp
-		}
-
-		if temp > st.Max {
-			st.Max = temp
-		} else if temp < st.Min {
-			st.Min = temp
-		}
-
-		st.Count++
-		st.Sum += temp
-		stations[name] = st
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading the file: %v", err)
 	}
 
 	return stations, nil
+}
+
+func worker(chunks chan []string, results chan Stations) {
+
+	for chunk := range chunks {
+
+		s := make(Stations)
+		for _, line := range chunk {
+			parts := strings.Split(line, ";")
+			name := parts[0]
+			temp, _ := strconv.ParseFloat(parts[1], 64)
+
+			st, ok := s[name]
+			if !ok {
+				st.Min = temp
+				st.Max = temp
+			}
+
+			st.Max = max(st.Max, temp)
+			st.Min = min(st.Min, temp)
+			st.Count++
+			st.Sum += temp
+			s[name] = st
+		}
+
+		results <- s
+	}
 }
 
 // sortNames returns a slice of sorted station names
