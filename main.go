@@ -35,11 +35,7 @@ func main() {
 // mapStations puts stations from file into a map with all the necessary stats
 func mapStations(filePath string) (Stations, error) {
 
-	// Lines in a chunk.
-	// The more lines, the more memory consumed and
-	// a biger chance for the OS to kill this program.
-	chunkSize := 5_000_000
-
+	chunkSize := 5_000_000 // Lines in a chunk
 	numWorkers := runtime.NumCPU() - 1
 	results := make(chan Stations)
 	chunks := make(chan []string)
@@ -81,10 +77,11 @@ func mapStations(filePath string) (Stations, error) {
 			if !ok {
 				st.Min = stats.Min
 				st.Max = stats.Max
+			} else {
+				st.Max = max(st.Max, stats.Max)
+				st.Min = min(st.Min, stats.Min)
 			}
 
-			st.Max = max(st.Max, stats.Max)
-			st.Min = min(st.Min, stats.Min)
 			st.Count += stats.Count
 			st.Sum += stats.Sum
 			stations[name] = st
@@ -108,10 +105,11 @@ func worker(chunks chan []string, results chan Stations) {
 			if !ok {
 				st.Min = temp
 				st.Max = temp
+			} else {
+				st.Max = max(st.Max, temp)
+				st.Min = min(st.Min, temp)
 			}
 
-			st.Max = max(st.Max, temp)
-			st.Min = min(st.Min, temp)
 			st.Count++
 			st.Sum += temp
 			s[name] = st
