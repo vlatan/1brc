@@ -38,12 +38,11 @@ func mapStations(filePath string) (Stations, error) {
 	// Lines in a chunk.
 	// The more lines, the more memory consumed and
 	// a biger chance for the OS to kill this program.
-	// Upper limit 40_000_000
-	chunkSize := 40_000_000
+	chunkSize := 5_000_000
 
 	numWorkers := runtime.NumCPU() - 1
-	results := make(chan Stations, numWorkers)
-	chunks := make(chan []string, numWorkers)
+	results := make(chan Stations)
+	chunks := make(chan []string)
 	var wg sync.WaitGroup
 
 	for range numWorkers {
