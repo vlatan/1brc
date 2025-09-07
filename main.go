@@ -36,16 +36,25 @@ func main() {
 // mapStations puts stations from file into a map with all the necessary stats
 func mapStations(filePath string) (Stations, error) {
 
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open the file: %w", err)
+	}
+	defer file.Close()
+
 	chunkSize := 64 * 1024 * 1024 // 64MiB
 	numWorkers := runtime.NumCPU() - 1
 	results := make(chan Stations)
 	chunks := make(chan []byte, 10)
 	var wg sync.WaitGroup
 
+	// Spawn workers in the background
 	for range numWorkers {
 		wg.Go(func() { worker(chunks, results) })
 	}
 
+	// Spawn a background job that reads the file
+	// in chunks and sends them to the chunks channel
 	go func() {
 
 		defer func() {
@@ -54,12 +63,6 @@ func mapStations(filePath string) (Stations, error) {
 		}()
 
 		defer close(chunks)
-
-		file, err := os.Open(filePath)
-		if err != nil {
-			log.Fatalf("Unable to open the file: %v", err)
-		}
-		defer file.Close()
 
 		buf := make([]byte, chunkSize)
 		var leftover []byte
@@ -96,9 +99,9 @@ func mapStations(filePath string) (Stations, error) {
 			// Send chunk to channel
 			chunks <- chunk
 		}
-
 	}()
 
+	// Collect the results
 	stations := make(Stations)
 	for result := range results {
 		for name, stats := range result {
@@ -120,6 +123,8 @@ func mapStations(filePath string) (Stations, error) {
 	return stations, nil
 }
 
+// worker consumes a chunk from the chunks channel,
+// produces a result map and sends it to the results channel
 func worker(chunks chan []byte, results chan Stations) {
 
 	for chunk := range chunks {
@@ -171,6 +176,7 @@ func (s Stations) sortNames() []string {
 	return names
 }
 
+// parseTemp converts string to int64
 func parseTemp(temp []byte) (result int64) {
 	var neg bool
 	if temp[0] == '-' {
@@ -200,6 +206,7 @@ func parseTemp(temp []byte) (result int64) {
 }
 
 // String creates a string respresentation from stations map
+// which makes the stations implement the Stringer interface
 func (s Stations) String() string {
 
 	var sb strings.Builder
