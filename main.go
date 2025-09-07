@@ -52,7 +52,7 @@ func mapStations(filePath string) (Stations, error) {
 	defer file.Close()
 
 	chunkSize := 64 * 1024 * 1024 // 64MiB
-	numWorkers := runtime.NumCPU() - 1
+	numWorkers := runtime.NumCPU()
 	results := make(chan Stations, numWorkers)
 	chunks := make(chan []byte, numWorkers)
 	var wg sync.WaitGroup
