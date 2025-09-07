@@ -49,8 +49,8 @@ func mapStations(filePath string) (Stations, error) {
 
 	chunkSize := 64 * 1024 * 1024 // 64MiB
 	numWorkers := runtime.NumCPU() - 1
-	results := make(chan Stations)
-	chunks := make(chan []byte, 10)
+	results := make(chan Stations, numWorkers)
+	chunks := make(chan []byte, numWorkers)
 	var wg sync.WaitGroup
 
 	// Spawn workers in the background
