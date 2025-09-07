@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,8 +96,7 @@ func worker(chunks chan []string, results chan Stations) {
 
 		s := make(Stations)
 		for _, line := range chunk {
-			name, tempStr, _ := strings.Cut(line, ";")
-			temp := parseTemp(tempStr)
+			name, temp := parseLine(line)
 
 			st, ok := s[name]
 			if !ok {
@@ -132,10 +130,40 @@ func (s Stations) sortNames() []string {
 	return names
 }
 
-func parseTemp(temp string) int64 {
-	temp = strings.Replace(temp, ".", "", 1)
-	result, _ := strconv.ParseInt(temp, 10, 64)
-	return result
+func parseLine(line string) (string, int64) {
+	for i, char := range line {
+		if char == ';' {
+			return line[:i], parseTemp(line[i+1:])
+		}
+	}
+
+	return "", 0
+}
+
+func parseTemp(temp string) (result int64) {
+	var neg bool
+	if temp[0] == '-' {
+		neg = true
+		temp = temp[1:]
+	}
+
+	// Look up the ASCII table codes for digits and this clever math pans out
+	switch len(temp) {
+	case 3:
+		// Example "2.5"
+		// 50*10 + 53 - 48*11 = 25
+		result = int64(temp[0])*10 + int64(temp[2]) - int64('0')*11
+	case 4:
+		// Example "12.5"
+		// 49*100 + 50*10 + 53 - 48*111 = 125
+		result = int64(temp[0])*100 + int64(temp[1])*10 + int64(temp[3]) - (int64('0') * 111)
+	}
+
+	if neg {
+		return -result
+	}
+
+	return
 }
 
 // String creates a string respresentation from stations map
