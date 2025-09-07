@@ -38,7 +38,7 @@ func mapStations(filePath string) (Stations, error) {
 	chunkSize := 5_000_000 // Lines in a chunk
 	numWorkers := runtime.NumCPU() - 1
 	results := make(chan Stations)
-	chunks := make(chan []string)
+	chunks := make(chan []string, 10)
 	var wg sync.WaitGroup
 
 	for range numWorkers {
