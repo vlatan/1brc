@@ -150,9 +150,9 @@ func (s Stations) String() string {
 		}
 
 		stats := s[name]
-		minTemp := float64(stats.Min) / 10
-		maxTemp := float64(stats.Max) / 10
-		avgTemp := float64(stats.Sum/stats.Count) / 10
+		minTemp := float64(stats.Min) / 10.0
+		maxTemp := float64(stats.Max) / 10.0
+		avgTemp := float64(stats.Sum) / float64(stats.Count) / 10.0
 		statsStr := fmt.Sprintf("%s=%.1f/%.1f/%.1f", name, minTemp, avgTemp, maxTemp)
 		sb.WriteString(statsStr)
 	}
