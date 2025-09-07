@@ -14,7 +14,7 @@ import (
 )
 
 type Station struct {
-	Min, Max, Count, Sum float64
+	Min, Max, Count, Sum int64
 }
 
 type Stations map[string]Station
@@ -97,9 +97,8 @@ func worker(chunks chan []string, results chan Stations) {
 
 		s := make(Stations)
 		for _, line := range chunk {
-			parts := strings.Split(line, ";")
-			name := parts[0]
-			temp, _ := strconv.ParseFloat(parts[1], 64)
+			name, tempStr, _ := strings.Cut(line, ";")
+			temp := parseTemp(tempStr)
 
 			st, ok := s[name]
 			if !ok {
@@ -133,6 +132,12 @@ func (s Stations) sortNames() []string {
 	return names
 }
 
+func parseTemp(temp string) int64 {
+	temp = strings.Replace(temp, ".", "", 1)
+	result, _ := strconv.ParseInt(temp, 10, 64)
+	return result
+}
+
 // String creates a string respresentation from stations map
 func (s Stations) String() string {
 
@@ -145,7 +150,10 @@ func (s Stations) String() string {
 		}
 
 		stats := s[name]
-		statsStr := fmt.Sprintf("%s=%.1f/%.1f/%.1f", name, stats.Min, stats.Sum/stats.Count, stats.Max)
+		minTemp := float64(stats.Min) / 10
+		maxTemp := float64(stats.Max) / 10
+		avgTemp := float64(stats.Sum/stats.Count) / 10
+		statsStr := fmt.Sprintf("%s=%.1f/%.1f/%.1f", name, minTemp, avgTemp, maxTemp)
 		sb.WriteString(statsStr)
 	}
 
