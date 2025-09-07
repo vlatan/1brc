@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"runtime"
@@ -34,10 +36,10 @@ func main() {
 // mapStations puts stations from file into a map with all the necessary stats
 func mapStations(filePath string) (Stations, error) {
 
-	chunkSize := 5_000_000 // Lines in a chunk
+	chunkSize := 64 * 1024 * 1024 // 64MiB
 	numWorkers := runtime.NumCPU() - 1
 	results := make(chan Stations)
-	chunks := make(chan []string, 10)
+	chunks := make(chan []byte, 10)
 	var wg sync.WaitGroup
 
 	for range numWorkers {
@@ -45,28 +47,56 @@ func mapStations(filePath string) (Stations, error) {
 	}
 
 	go func() {
+
+		defer func() {
+			wg.Wait()
+			close(results)
+		}()
+
 		defer close(chunks)
-		file, _ := os.Open(filePath)
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			log.Fatalf("Unable to open the file: %v", err)
+		}
 		defer file.Close()
 
-		chunk := make([]string, 0, chunkSize)
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			chunk = append(chunk, scanner.Text())
-			if len(chunk) == chunkSize {
-				chunks <- chunk
-				chunk = chunk[:0]
-			}
-		}
+		buf := make([]byte, chunkSize)
+		var leftover []byte
 
-		if len(chunk) > 0 {
+		for {
+			bytesRead, err := file.Read(buf)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				log.Fatalf("Unable to read the file: %v", err)
+			}
+
+			// file.Read(buf) might read less than 64MiB (especially near EOF)
+			// The unread portion of buf contains garbage/old data
+			// So we need the data that was ACTUALLY read
+			data := buf[:bytesRead]
+
+			// Determine where is the last '\n' in the data
+			lastNLIndex := bytes.LastIndex(data, []byte{'\n'})
+
+			// Length of the previous leftover + what we need of the current data
+			chunk := make([]byte, len(leftover)+lastNLIndex+1)
+			// Copy the previous leftover to the begining of the chunk
+			copy(chunk, leftover)
+			// Copy what we need of the buffer to the rest of the chunk
+			copy(chunk[len(leftover):], data[:lastNLIndex+1])
+
+			// Make new leftover
+			currentLeftover := data[lastNLIndex+1:]
+			leftover = make([]byte, len(currentLeftover))
+			copy(leftover, currentLeftover)
+
+			// Send chunk to channel
 			chunks <- chunk
 		}
-	}()
 
-	go func() {
-		wg.Wait()
-		close(results)
 	}()
 
 	stations := make(Stations)
@@ -90,26 +120,37 @@ func mapStations(filePath string) (Stations, error) {
 	return stations, nil
 }
 
-func worker(chunks chan []string, results chan Stations) {
+func worker(chunks chan []byte, results chan Stations) {
 
 	for chunk := range chunks {
 
 		s := make(Stations)
-		for _, line := range chunk {
-			name, temp := parseLine(line)
+		var cursor int
+		var name string
 
-			st, ok := s[name]
-			if !ok {
-				st.Min = temp
-				st.Max = temp
-			} else {
-				st.Max = max(st.Max, temp)
-				st.Min = min(st.Min, temp)
+		for i, char := range chunk {
+
+			switch char {
+			case ';':
+				name = string(chunk[cursor:i])
+				cursor = i + 1
+			case '\n':
+				temp := parseTemp(chunk[cursor:i])
+				cursor = i + 1
+
+				st, ok := s[name]
+				if !ok {
+					st.Min = temp
+					st.Max = temp
+				} else {
+					st.Max = max(st.Max, temp)
+					st.Min = min(st.Min, temp)
+				}
+
+				st.Count++
+				st.Sum += temp
+				s[name] = st
 			}
-
-			st.Count++
-			st.Sum += temp
-			s[name] = st
 		}
 
 		results <- s
@@ -130,17 +171,7 @@ func (s Stations) sortNames() []string {
 	return names
 }
 
-func parseLine(line string) (string, int64) {
-	for i, char := range line {
-		if char == ';' {
-			return line[:i], parseTemp(line[i+1:])
-		}
-	}
-
-	return "", 0
-}
-
-func parseTemp(temp string) (result int64) {
+func parseTemp(temp []byte) (result int64) {
 	var neg bool
 	if temp[0] == '-' {
 		neg = true
@@ -157,6 +188,8 @@ func parseTemp(temp string) (result int64) {
 		// Example "12.5"
 		// 49*100 + 50*10 + 53 - 48*111 = 125
 		result = int64(temp[0])*100 + int64(temp[1])*10 + int64(temp[3]) - (int64('0') * 111)
+	default:
+		log.Fatalf("Unable to parse temperature to int64: %s", temp)
 	}
 
 	if neg {
