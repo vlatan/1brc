@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -20,11 +21,15 @@ type Station struct {
 
 type Stations map[string]Station
 
+var filePath = flag.String("f", "", "path to the input file")
+
 func main() {
+
+	flag.Parse()
 
 	start := time.Now()
 
-	stations, err := mapStations("measurements.txt")
+	stations, err := mapStations(*filePath)
 	if err != nil {
 		log.Fatalf("Error mapping the stations: %v", err)
 	}
