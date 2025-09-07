@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 type Station struct {
@@ -26,6 +27,9 @@ var filePath = flag.String("f", "", "path to the input file")
 func main() {
 
 	flag.Parse()
+	if *filePath == "" {
+		log.Fatal("Please provide the file path with the -f flag")
+	}
 
 	start := time.Now()
 
@@ -112,16 +116,14 @@ func mapStations(filePath string) (Stations, error) {
 		for name, stats := range result {
 			st, ok := stations[name]
 			if !ok {
-				st.Min = stats.Min
-				st.Max = stats.Max
+				stations[name] = stats
 			} else {
 				st.Max = max(st.Max, stats.Max)
 				st.Min = min(st.Min, stats.Min)
+				st.Count += stats.Count
+				st.Sum += stats.Sum
+				stations[name] = st
 			}
-
-			st.Count += stats.Count
-			st.Sum += stats.Sum
-			stations[name] = st
 		}
 	}
 
@@ -142,7 +144,8 @@ func worker(chunks chan []byte, results chan Stations) {
 
 			switch char {
 			case ';':
-				name = string(chunk[cursor:i])
+				nameBytes := chunk[cursor:i]
+				name = unsafe.String(&nameBytes[0], len(nameBytes))
 				cursor = i + 1
 			case '\n':
 				temp := parseTemp(chunk[cursor:i])
