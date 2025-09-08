@@ -4,7 +4,7 @@ Inspired by: https://github.com/shraddhaag/1brc
 
 ## Instructions
 
-Clone the [The One Billion Row Challenge](https://github.com/gunnarmorling/1brc) repo.  
+Clone the [The One Billion Row Challenge](https://github.com/gunnarmorling/1brc) repo and cd into it.
 
 ### Generate the input file:
 ```
@@ -18,6 +18,8 @@ java dev.morling.onebrc.CreateMeasurements 1000000000
 ```
 
 ### Build and run:
+
+Copy over the generated file to a desired location and supply its path to this binary.
 
 ``` bash
 go build main.go
