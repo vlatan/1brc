@@ -134,8 +134,8 @@ func mapStations(filePath string) (Stations, error) {
 			if !ok {
 				stations[name] = stats
 			} else {
-				st.Max = max(st.Max, stats.Max)
 				st.Min = min(st.Min, stats.Min)
+				st.Max = max(st.Max, stats.Max)
 				st.Count += stats.Count
 				st.Sum += stats.Sum
 				stations[name] = st
@@ -180,8 +180,8 @@ func worker(chunks chan Chunk, results chan Result) {
 					st.Min = temp
 					st.Max = temp
 				} else {
-					st.Max = max(st.Max, temp)
 					st.Min = min(st.Min, temp)
+					st.Max = max(st.Max, temp)
 				}
 
 				st.Count++
