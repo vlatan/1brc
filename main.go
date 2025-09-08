@@ -22,6 +22,16 @@ type Station struct {
 
 type Stations map[string]Station
 
+type Chunk struct {
+	Error error
+	Data  []byte
+}
+
+type Result struct {
+	Error error
+	Data  Stations
+}
+
 var filePath = flag.String("f", "", "path to the input file")
 
 func main() {
@@ -35,7 +45,7 @@ func main() {
 
 	stations, err := mapStations(*filePath)
 	if err != nil {
-		log.Fatalf("Error mapping the stations: %v", err)
+		log.Fatal(err)
 	}
 
 	fmt.Println(stations)
@@ -47,14 +57,14 @@ func mapStations(filePath string) (Stations, error) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open the file: %w", err)
+		return nil, fmt.Errorf("unable to open the file; %w", err)
 	}
 	defer file.Close()
 
 	chunkSize := 64 * 1024 * 1024 // 64MiB
 	numWorkers := runtime.NumCPU()
-	results := make(chan Stations, numWorkers)
-	chunks := make(chan []byte, numWorkers)
+	results := make(chan Result, numWorkers)
+	chunks := make(chan Chunk, numWorkers)
 	var wg sync.WaitGroup
 
 	// Spawn workers in the background
@@ -82,7 +92,9 @@ func mapStations(filePath string) (Stations, error) {
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				log.Fatalf("Unable to read the file: %v", err)
+
+				chunks <- Chunk{Error: fmt.Errorf("unable to read the file; %w", err)}
+				return
 			}
 
 			// file.Read(buf) might read less than 64MiB (especially near EOF)
@@ -106,14 +118,18 @@ func mapStations(filePath string) (Stations, error) {
 			copy(leftover, currentLeftover)
 
 			// Send chunk to channel
-			chunks <- chunk
+			chunks <- Chunk{Data: chunk}
 		}
 	}()
 
 	// Collect the results
 	stations := make(Stations)
 	for result := range results {
-		for name, stats := range result {
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		for name, stats := range result.Data {
 			st, ok := stations[name]
 			if !ok {
 				stations[name] = stats
@@ -132,23 +148,31 @@ func mapStations(filePath string) (Stations, error) {
 
 // worker consumes a chunk from the chunks channel,
 // produces a result map and sends it to the results channel
-func worker(chunks chan []byte, results chan Stations) {
+func worker(chunks chan Chunk, results chan Result) {
 
 	for chunk := range chunks {
+		if chunk.Error != nil {
+			results <- Result{Error: chunk.Error}
+			return
+		}
 
 		s := make(Stations)
 		var cursor int
 		var name string
 
-		for i, char := range chunk {
+		for i, char := range chunk.Data {
 
 			switch char {
 			case ';':
-				nameBytes := chunk[cursor:i]
+				nameBytes := chunk.Data[cursor:i]
 				name = unsafe.String(&nameBytes[0], len(nameBytes))
 				cursor = i + 1
 			case '\n':
-				temp := parseTemp(chunk[cursor:i])
+				temp, err := parseTemp(chunk.Data[cursor:i])
+				if err != nil {
+					results <- Result{Error: err}
+					return
+				}
 				cursor = i + 1
 
 				st, ok := s[name]
@@ -166,7 +190,7 @@ func worker(chunks chan []byte, results chan Stations) {
 			}
 		}
 
-		results <- s
+		results <- Result{Data: s}
 	}
 }
 
@@ -185,7 +209,7 @@ func (s Stations) sortNames() []string {
 }
 
 // parseTemp converts string to int64
-func parseTemp(temp []byte) (result int64) {
+func parseTemp(temp []byte) (result int64, err error) {
 	var neg bool
 	if temp[0] == '-' {
 		neg = true
@@ -203,11 +227,11 @@ func parseTemp(temp []byte) (result int64) {
 		// 49*100 + 50*10 + 53 - 48*111 = 125
 		result = int64(temp[0])*100 + int64(temp[1])*10 + int64(temp[3]) - (int64('0') * 111)
 	default:
-		log.Fatalf("Unable to parse temperature to int64: %s", temp)
+		return 0, fmt.Errorf("unable to parse temperature to int64; %s", temp)
 	}
 
 	if neg {
-		return -result
+		return -result, nil
 	}
 
 	return
