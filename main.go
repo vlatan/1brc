@@ -196,14 +196,10 @@ func worker(chunks chan Chunk, results chan Result) {
 
 // sortNames returns a slice of sorted station names
 func (s Stations) sortNames() []string {
-	names := make([]string, len(s))
-	var i int
-
+	names := make([]string, 0, len(s))
 	for name := range s {
-		names[i] = name
-		i++
+		names = append(names, name)
 	}
-
 	sort.Strings(names)
 	return names
 }
@@ -227,7 +223,7 @@ func parseTemp(temp []byte) (result int64, err error) {
 		// 49*100 + 50*10 + 53 - 48*111 = 125
 		result = int64(temp[0])*100 + int64(temp[1])*10 + int64(temp[3]) - (int64('0') * 111)
 	default:
-		return 0, fmt.Errorf("unable to parse temperature to int64; %s", temp)
+		return 0, fmt.Errorf("unexpected temperature format '%s';", temp)
 	}
 
 	if neg {
