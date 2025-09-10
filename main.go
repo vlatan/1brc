@@ -105,20 +105,19 @@ func mapStations(filePath string) (Stations, error) {
 			// Determine where is the last '\n' in the data
 			lastNLIndex := bytes.LastIndex(data, []byte{'\n'})
 
-			// Length of the previous leftover + what we need of the current data
-			chunk := make([]byte, len(leftover)+lastNLIndex+1)
-			// Copy the previous leftover to the begining of the chunk
-			copy(chunk, leftover)
-			// Copy what we need of the buffer to the rest of the chunk
-			copy(chunk[len(leftover):], data[:lastNLIndex+1])
+			// Combine the previous leftover with the data up to the last newline.
+			chunkToSend := make([]byte, len(leftover)+lastNLIndex+1)
+			copy(chunkToSend, leftover)
+			copy(chunkToSend[len(leftover):], data[:lastNLIndex+1])
 
-			// Make new leftover
+			// Make a new leftover, copy it to a new slice
+			// so we don't overwrite the underlying buffer
 			currentLeftover := data[lastNLIndex+1:]
 			leftover = make([]byte, len(currentLeftover))
 			copy(leftover, currentLeftover)
 
 			// Send chunk to channel
-			chunks <- Chunk{Data: chunk}
+			chunks <- Chunk{Data: chunkToSend}
 		}
 	}()
 
